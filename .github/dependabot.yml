@@ -1,0 +1,38 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      python-dependencies:
+        patterns: ["*"]
+    ignore:
+      # Keep the reference lock on 5.2/7.4. Matrix jobs resolve the other supported lines.
+      - dependency-name: Django
+        versions: [">=5.3"]
+      - dependency-name: wagtail
+        versions: [">=7.5"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directories: ["/", "/.github/workflows"]
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      container-images:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "*python"
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: postgres
+        update-types: [version-update:semver-major]

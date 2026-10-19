@@ -1,0 +1,12 @@
+{% load i18n %}
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{% translate "Sign-in unavailable" %}</title></head>
+<body>
+    <main>
+        <h1>{% translate "SSO sign-in could not be completed" %}</h1>
+        <p>{% translate "Try again or contact your site administrator." %}</p>
+        <p><a href="{% url 'wagtailadmin_login' %}">{% translate "Return to local sign-in" %}</a></p>
+    </main>
+</body>
+</html>

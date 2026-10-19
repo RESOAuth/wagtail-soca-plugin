@@ -1,0 +1,127 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  podman:
+    name: Podman / Wagtail ${{ matrix.wagtail }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        wagtail: ["7.4", "8.0"]
+    env:
+      WAGTAIL_VERSION: ${{ matrix.wagtail }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build package and test image
+        run: podman build --build-arg "WAGTAIL_VERSION=$WAGTAIL_VERSION" -t soca-test -f Containerfile .
+      - name: Run tests as an unprivileged container user
+        run: podman run --rm --network=none --read-only --tmpfs /tmp:rw,nosuid,nodev,size=256m soca-test
+      - name: Export checked distributions
+        run: |
+          podman create --name soca-artifacts soca-test
+          podman cp soca-artifacts:/app/dist ./dist
+          podman rm soca-artifacts
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: distributions-wagtail-${{ matrix.wagtail }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  compatibility:
+    name: Python ${{ matrix.python }} / Wagtail ${{ matrix.wagtail }} / Django ${{ matrix.django }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {python: "3.10", wagtail: "7.4", django: "5.2"}
+          - {python: "3.14", wagtail: "7.4", django: "5.2"}
+          - {python: "3.12", wagtail: "7.4", django: "6.0"}
+          - {python: "3.10", wagtail: "8.0", django: "5.2"}
+          - {python: "3.14", wagtail: "8.0", django: "5.2"}
+          - {python: "3.12", wagtail: "8.0", django: "6.0"}
+          - {python: "3.12", wagtail: "8.0", django: "6.1"}
+          - {python: "3.14", wagtail: "8.0", django: "6.1"}
+    env:
+      DJANGO_SETTINGS_MODULE: tests.settings
+      PYTHONDONTWRITEBYTECODE: "1"
+      WAGTAIL_VERSION: ${{ matrix.wagtail }}
+      DJANGO_VERSION: ${{ matrix.django }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Resolve supported dependencies and build release archives
+        run: |
+          python -m pip install '.[test]' "wagtail~=$WAGTAIL_VERSION.0" "Django~=$DJANGO_VERSION.0"
+          python -m build
+          python tests/verify_distribution.py dist
+          python -m pip install --force-reinstall --no-deps dist/*.whl
+      - name: Test installed wheel outside checkout
+        run: |
+          mkdir -p "$RUNNER_TEMP/soca-suite"
+          cp -R tests "$RUNNER_TEMP/soca-suite/tests"
+          cd "$RUNNER_TEMP/soca-suite"
+          sh tests/run-tests.sh
+
+  postgres:
+    name: PostgreSQL / Wagtail ${{ matrix.wagtail }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        wagtail: ["7.4", "8.0"]
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:aa90e97ee862e558111d34cfb8b2c4bec768c2b039fb791341686928560263b3
+        env:
+          POSTGRES_DB: soca_tests
+          POSTGRES_PASSWORD: soca-ci-test-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d soca_tests"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DJANGO_SETTINGS_MODULE: tests.settings_postgres
+      PYTHONDONTWRITEBYTECODE: "1"
+      PGDATABASE: soca_tests
+      PGUSER: postgres
+      PGPASSWORD: soca-ci-test-only
+      PGHOST: 127.0.0.1
+      WAGTAIL_VERSION: ${{ matrix.wagtail }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install supported dependencies and wheel
+        run: |
+          python -m pip install '.[test,postgres-test]' "wagtail~=$WAGTAIL_VERSION.0" 'Django~=5.2.0'
+          python -m build
+          python -m pip install --force-reinstall --no-deps dist/*.whl
+      - name: Test PostgreSQL including concurrent callbacks and provisioning
+        run: |
+          mkdir -p "$RUNNER_TEMP/soca-suite"
+          cp -R tests "$RUNNER_TEMP/soca-suite/tests"
+          cd "$RUNNER_TEMP/soca-suite"
+          sh tests/run-tests.sh

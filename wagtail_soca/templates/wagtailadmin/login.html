@@ -1,0 +1,10 @@
+{% extends "wagtailadmin/login.html" %}
+{% load i18n soca %}
+
+{% block below_login %}
+    {{ block.super }}
+    {% soca_enabled as use_soca %}
+    {% if use_soca %}
+        <p><a class="button button-secondary" href="{% url 'wagtail_soca:login' %}?next={{ next|urlencode }}">{% translate "Continue with SSO" %}</a></p>
+    {% endif %}
+{% endblock %}

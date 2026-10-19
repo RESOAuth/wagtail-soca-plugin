@@ -1,0 +1,5 @@
+include Containerfile requirements-test.txt
+include SECURITY.md CONTRIBUTING.md
+recursive-include tests *.py *.sh
+recursive-include docs *.md
+recursive-include demo *.py *.md
