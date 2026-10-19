@@ -15,9 +15,9 @@ django-permissionedforms==0.1
 django-stubs-ext==6.1.2
 django-taggit==6.1.0
 django-tasks==0.12.0
-django-treebeard==5.3.1
+django-treebeard==7.0.2
 djangorestframework==3.18.3
-draftjs_exporter==5.2.0
+draftjs_exporter==7.1.0
 et_xmlfile==2.0.0
 filetype==1.2.0
 idna==3.20
