@@ -1,5 +1,18 @@
 # Test results — 0.0.1
 
+## Release compatibility verification
+
+The initial release PR adds Wagtail 7.4/8.0 compatibility, archive validation and hosted CI/security automation: [PR #1](https://github.com/RESOAuth/wagtail-soca-plugin/pull/1). The checks tab is authoritative for the latest commit's Python/Django/PostgreSQL/CodeQL results; historical local results below are not claims about those hosted runs.
+
+- Local rootless Podman, Python 3.12 / Django 5.2.18 / Wagtail 7.4.3: **89 tests passed**.
+- Local rootless Podman, Python 3.12 / Django 5.2.18 / Wagtail 8.0: **89 tests passed**.
+- Both runs: no external test-network access, non-root user, read-only image, ephemeral writable `/tmp`; lint/formatting, system checks, migration drift, static collection, installed-wheel resources and dependency consistency passed.
+- Both archive builds: wheel/sdist version and AGPL license metadata, templates, migrations, maintenance commands, package boundaries and private/generated-file checks passed.
+- Workflow syntax: actionlint 1.7.12 passed. Actions and reference images are pinned to immutable commits/digests; Dependabot maintains updates.
+- The existing interactive demo and its persistent data were not upgraded or reset for compatibility testing. Wagtail 8 browser-engine and real-user provider authentication are not claimed by these synthetic runs.
+
+The additional hosted matrix tests supported Python boundaries and Django 6.0/6.1, plus PostgreSQL 17 concurrency on both Wagtail versions. Scheduled CodeQL and Dependabot version updates become active after merge to the default branch. No tag or published release is created by this PR.
+
 ## Initial build
 
 Executed locally on 2026-10-19 with rootless Podman. The test container ran as UID 10001 with `--network=none`, `--read-only` and an ephemeral `/tmp` mount. Tests imported the installed wheel from site-packages, outside the source checkout.
