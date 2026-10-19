@@ -79,9 +79,9 @@ class RequestLog(WSGIRequestHandler):
 
     def log_request(self, code="-", size="-"):
         # OAuth state/codes/nonce must never appear in access logs.
-        logging.getLogger("soca_demo.http").info(
-            "%s %s %s", self.command, urlsplit(self.path).path, code
-        )
+        method = self.command.replace("\r", "\\r").replace("\n", "\\n")
+        path = urlsplit(self.path).path.replace("\r", "\\r").replace("\n", "\\n")
+        logging.getLogger("soca_demo.http").info("%s %s %s", method, path, code)
 
 
 def main():
@@ -106,6 +106,7 @@ def main():
             password=(DATA_DIR / "admin-password").read_text(),
         )
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(DATA_DIR / "tls.pem", DATA_DIR / "tls.key")
 
     def stop(signum, frame):

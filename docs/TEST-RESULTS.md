@@ -13,6 +13,8 @@ The initial release PR adds Wagtail 7.4/8.0 compatibility, archive validation an
 
 The additional hosted matrix tests supported Python boundaries and Django 6.0/6.1, plus PostgreSQL 17 concurrency on both Wagtail versions. Scheduled CodeQL and Dependabot version updates become active after merge to the default branch. No tag or published release is created by this PR.
 
+The first hosted run passed all 12 CI jobs. CodeQL's initial scan identified TLS minimum-version and request-log sanitization issues in the demo/test harness; these were hardened explicitly and a TLS-minimum regression test was added (90 tests in the final suite). Final security results are available on the PR's latest commit; alerts are fixed in code, not suppressed.
+
 ## Initial build
 
 Executed locally on 2026-10-19 with rootless Podman. The test container ran as UID 10001 with `--network=none`, `--read-only` and an ephemeral `/tmp` mount. Tests imported the installed wheel from site-packages, outside the source checkout.

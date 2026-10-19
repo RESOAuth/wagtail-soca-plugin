@@ -84,6 +84,7 @@ class TLSTransportTests(TestCase):
             )
         )
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.load_cert_chain(cert_file, key_file)
         cls.sni = []
         context.set_servername_callback(lambda sock, server_name, ctx: cls.sni.append(server_name))
@@ -116,6 +117,9 @@ class TLSTransportTests(TestCase):
             with self.assertRaises(SocaError):
                 request_json(self.origin + "/redirect")
         self.assertIn("provider.example.com", self.sni)
+
+    def test_server_requires_tls12_or_newer(self):
+        self.assertGreaterEqual(self.server.socket.context.minimum_version, ssl.TLSVersion.TLSv1_2)
 
     @patch("wagtail_soca.http.public_addresses", return_value=["127.0.0.1"])
     def test_untrusted_certificate_and_wrong_hostname_refused(self, addresses):
