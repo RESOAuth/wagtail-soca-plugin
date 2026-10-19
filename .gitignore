@@ -218,3 +218,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Deployment signing keys must stay outside the repository.
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+/data/

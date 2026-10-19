@@ -1,0 +1,102 @@
+{% extends "wagtailadmin/base.html" %}
+{% load i18n wagtailadmin_tags %}
+{% block titletag %}SOCA{% endblock %}
+{% block extra_css %}
+    {{ block.super }}
+    <style>#soca-settings .w-field--select, #soca-settings select { max-width: 100%; }</style>
+{% endblock %}
+{% block content %}
+    {% include "wagtailadmin/shared/header.html" with title="SOCA" subtitle="Single sign-on" icon="lock" %}
+    <div class="nice-padding" id="soca-settings">
+        <p>Connect Wagtail to RESOAuth or another compatible OpenID Connect provider. Changes apply immediately when saved.</p>
+        <nav aria-label="SOCA settings sections" class="w-flex w-flex-wrap w-gap-4 w-mb-8">
+            <a href="#connection">Connection</a>
+            <a href="#access">Access rules</a>
+            <a href="#connection-check">Connection check</a>
+            <a href="#claim-inspector">Claim inspector</a>
+        </nav>
+        {% if configuration_error %}
+            <div class="help-block help-critical"><p>Deployment configuration needs attention ({{ configuration_error }}). The site origin and a persistent P-256 signing key must be configured on the server.</p></div>
+        {% endif %}
+        {% if admission_empty %}
+            <div class="help-block help-warning"><p>No email addresses or domains are allowed. SSO logins will be refused until you add an access rule.</p></div>
+        {% endif %}
+        <form method="post" action="{% url 'wagtail_soca_settings' %}" novalidate data-controller="w-unsaved" data-action="beforeunload@window->w-unsaved#confirm submit->w-unsaved#submit" data-w-unsaved-confirmation-value="true">
+            {% csrf_token %}
+            {{ form.revision }}
+            {% if form.non_field_errors %}<div class="help-block help-critical">{{ form.non_field_errors }}</div>{% endif %}
+            <section id="connection" aria-labelledby="connection-heading">
+                <h2 id="connection-heading">Connection</h2>
+                {% formattedfield form.enabled %}
+                {% formattedfield form.issuer %}
+                {% formattedfield form.metadata_mode %}
+                {% formattedfield form.metadata_proxy %}
+                <details class="w-mb-8"{% if form.id_token_alg.errors or form.assertion_audience.errors %} open{% endif %}>
+                    <summary>Advanced provider options</summary>
+                    {% formattedfield form.id_token_alg %}
+                    {% formattedfield form.assertion_audience %}
+                </details>
+            </section>
+            <section id="access" aria-labelledby="access-heading">
+                <h2 id="access-heading">Access rules</h2>
+                <p>Admission requires a verified provider email and an allow rule. Existing accounts must be active, have Wagtail admin access, and match the email uniquely. Their permissions are never changed.</p>
+                <p>Your Wagtail email: <strong>{{ account_email|default:"Not set" }}</strong>. <a href="{{ account_url }}">Edit your Wagtail account</a> or <a href="{% url 'wagtailusers_users:index' %}">manage users</a> to set the email you will use at your provider, then add an allow rule below.</p>
+                {% formattedfield form.allow_emails %}
+                {% formattedfield form.allow_domains %}
+                <details class="w-mb-8"{% if form.deny_emails.value or form.deny_domains.value or form.deny_emails.errors or form.deny_domains.errors %} open{% endif %}>
+                    <summary>Deny rules</summary>
+                    {% formattedfield form.deny_emails %}
+                    {% formattedfield form.deny_domains %}
+                </details>
+                <h3>Account creation</h3>
+                {% formattedfield form.create_users %}
+                {% formattedfield form.new_user_group %}
+                <p>Profile defaults: fill blank first/last names from verified claims, preserving names already set locally. New accounts use a valid, available preferred username or an email-derived fallback. Existing usernames, emails and permissions stay unchanged.</p>
+                <p>Choose the least-privileged group needed. Anyone with a verified, allowed email can receive this group's permissions when account creation is enabled. Deny rules still take priority.</p>
+                <p>A provider that can verify an admitted administrator email can sign in as that administrator. Keep a working local administrator password.</p>
+            </section>
+            <button type="submit" name="action" value="save" class="button">Save settings</button>
+            {% if updated_at %}<p>Last saved: {{ updated_at }}</p>{% endif %}
+        </form>
+        <section id="connection-check" aria-labelledby="check-heading" class="w-mt-12 w-mb-12">
+            <h2 id="check-heading">Connection check</h2>
+            <p>Status: <strong>{% if sso_enabled %}SSO enabled{% else %}SSO disabled{% endif %}</strong>. Save changes before checking. A successful check verifies the provider and published documents; complete a real login to verify sign-in.</p>
+            {% if config %}
+                <dl>
+                    <dt>Site origin</dt><dd>{{ config.base_url }}</dd>
+                    <dt>Callback URL</dt><dd><code style="overflow-wrap:anywhere">{{ callback_url }}</code></dd>
+                </dl>
+                <p><label for="soca-client-id">Client ID / metadata URL</label></p>
+                <input id="soca-client-id" type="text" readonly value="{{ config.client_id }}" style="width:100%" aria-describedby="client-id-help">
+                <p id="client-id-help">{% if config.metadata_proxy %}The metadata service publishes the public signing key. Changing public metadata or keys changes this client ID.{% else %}The provider must be able to fetch this public HTTPS metadata URL.{% endif %}</p>
+                <p>Public signing key ID: <code style="overflow-wrap:anywhere">{{ config.public_key.kid }}</code>. The private key is managed on the server.</p>
+            {% endif %}
+            <form method="post" action="{% url 'wagtail_soca_settings' %}">
+                {% csrf_token %}
+                <button type="submit" name="action" value="check" class="button button-secondary">Check connection</button>
+            </form>
+            <p>{% if sso_enabled %}<a href="{% url 'wagtail_soca:login' %}?next={% url 'wagtail_soca_settings' %}">Test SSO login</a> · {% endif %}<a href="{% url 'wagtailadmin_login' %}">Local password sign-in</a></p>
+        </section>
+        <section id="claim-inspector" aria-labelledby="inspector-heading" class="w-mt-12 w-mb-12">
+            <h2 id="inspector-heading">Temporary claim inspector</h2>
+            <p>Superusers only. Explicitly capture the <strong>next successful SSO login on this installation</strong>, which may belong to another user. Only arm this when you are ready to test and have permission to inspect that user's personal data.</p>
+            <p>Shows verified ID-token claims and, when available, subject-matched UserInfo separately. Profile values are shown; nonce, token hashes, session identifiers and unknown claim values are redacted. Raw JWTs and access tokens are never retained or logged. The inspector itself does not change account fields; normal SSO profile defaults still apply.</p>
+            {% if inspection %}
+                {% if inspection.captured_at %}
+                    <p><strong>Captured:</strong> {{ inspection.captured_at }}. Available until {{ inspection.expires_at }}.</p>
+                    <pre style="white-space:pre-wrap;overflow-wrap:anywhere" aria-label="Verified claims">{{ inspection_json }}</pre>
+                {% else %}
+                    <p><strong>Armed:</strong> waiting for the next successful SSO login. Expires {{ inspection.expires_at }}.</p>
+                {% endif %}
+            {% else %}
+                <p><strong>Off.</strong> No claim inspection is retained.</p>
+            {% endif %}
+            <p>Arming expires after 10 minutes; captured results expire 10 minutes after capture. Results are encrypted in the database, become unreadable after expiry, and are deleted on the next inspector access or <code>soca_cleanup</code> run. Clear them as soon as you finish. If the SSO user is not a superuser, sign back in with your local administrator account to view the result here.</p>
+            <form method="post" action="{% url 'wagtail_soca_settings' %}">
+                {% csrf_token %}
+                <button type="submit" name="action" value="inspect_arm" class="button button-secondary">{% if inspection %}Re-arm for next SSO login{% else %}Inspect next SSO login{% endif %}</button>
+                <button type="submit" name="action" value="inspect_clear" class="button button-secondary">Clear and disable inspector</button>
+            </form>
+        </section>
+    </div>
+{% endblock %}
